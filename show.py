@@ -1,3 +1,18 @@
+'''
+Script permettant d'ouvrir une famille d'image de résolutions différentes dans une fenêtre tkinter.
+
+Les images d'une même résolution sont mises bout à bout pour simuler l'image complète.
+
+La transition entre les différentes résolution s'effectue en zoomant ou dézoomant grâce à la souris.
+La translation au sein d'une image complète virtuelle s'effectue en glissant la souris, ou en utilisant
+les barres de défilement.
+
+Arguments:
+ - Première résolution à afficher ;
+ - Répertoire de la famille d'images.
+
+'''
+
 import random, warnings
 import tkinter as tk
 from tkinter import ttk
@@ -7,15 +22,24 @@ import sys
 import numpy as np
 import timeit
 
+#Résolution à afficher en premier.
 resolution = sys.argv[1]
+#Répertoire de la famille d'images.
 repertoire = str(sys.argv[2]) + "/"
 
+#Référence au répertoire de travail.
 imgs = os.listdir(repertoire)
 
 
+
 class AutoScrollbar(ttk.Scrollbar):
-	''' A scrollbar that hides itself if it's not needed.
-		Works only if you use the grid geometry manager '''
+	''' Classe d'une barre de défilement, se plaçant à gauche et / ou en bas de la fenêtre si nécessaire.
+		Permet la translation au sein de l'image.
+		Indique la position de l'image affichée au sein de l'image complète virtuelle.
+	'''
+
+	''' Place la barre de défilement si besoin.
+	'''
 	def set(self, lo, hi):
 		if float(lo) <= 0.0 and float(hi) >= 1.0:
 			self.grid_remove()
@@ -29,44 +53,70 @@ class AutoScrollbar(ttk.Scrollbar):
 	def place(self, **kw):
 		raise tk.TclError('Cannot use place with this widget')
 
+
 class Zoom_Advanced(ttk.Frame):
-	''' Advanced zoom of the image '''
+	''' Classe du cadre principal. '''
+
 	def __init__(self, mainframe):
-		''' Initialize the main Frame '''
+		''' Initialise le cadre. '''
 		ttk.Frame.__init__(self, master=mainframe)
 		self.master.title('Zoom with mouse wheel')
-		# Vertical and horizontal scrollbars for canvas
+
+		# Barres de défilement.
 		vbar = AutoScrollbar(self.master, orient='vertical')
 		hbar = AutoScrollbar(self.master, orient='horizontal')
 		vbar.grid(row=0, column=1, sticky='ns')
 		hbar.grid(row=1, column=0, sticky='we')
-		# Create canvas and put image on it
+
+		# Création du canvas.
 		self.canvas = tk.Canvas(self.master, highlightthickness=0,
 								xscrollcommand=hbar.set, yscrollcommand=vbar.set)
 		self.canvas.grid(row=0, column=0, sticky='nswe')
-		self.canvas.update()  # wait till canvas is created
-		vbar.configure(command=self.scroll_y)  # bind scrollbars to the canvas
+		self.canvas.update()
+
+		# Lie le canvas et les barres de défilement.
+		vbar.configure(command=self.scroll_y)
 		hbar.configure(command=self.scroll_x)
-		# Make the canvas expandable
+
+		# Permet de rendre le canvas expendable.
 		self.master.rowconfigure(0, weight=1)
 		self.master.columnconfigure(0, weight=1)
-		# Bind events to the Canvas
-		self.canvas.bind('<Configure>', self.show_image)  # canvas is resized
+
+		# Inputs.
+		self.canvas.bind('<Configure>', self.show_image)
 		self.canvas.bind('<ButtonPress-1>', self.move_from)
 		self.canvas.bind('<B1-Motion>',     self.move_to)
-		self.canvas.bind('<MouseWheel>', self.wheel)  # with Windows and MacOS, but not Linux
+		self.canvas.bind('<MouseWheel>', self.wheel)
 		self.canvas.bind('<Shift-MouseWheel>', self.wheel)
-		self.canvas.bind('<Button-5>',   self.wheel)  # only with Linux, wheel scroll down
-		self.canvas.bind('<Button-4>',   self.wheel)  # only with Linux, wheel scroll up
+		self.canvas.bind('<Button-5>',   self.wheel)
+		self.canvas.bind('<Button-4>',   self.wheel)
+
+		# Résolution actuelle.
 		self.resolution = resolution
 
+		# Configuration du canvas.
 		self.configurate_canvas("C400-Mesh",str(resolution),imgs)
 
+
 	def configurate_canvas(self,nom,resolution,images,xmove=0.0,ymove=0.0):
+		''' Configuration du canvas à une certaine résolution.
+			Permet d'initialiser le cadre, puis de passer d'une résolution à une autre.
+			Appelle la méthode self.initial_show_image() pour mettre en place le canvas.
+
+			Args:
+			 - nom : première partie du nom des images ;
+			 - resolution : résolution à utiliser ;
+			 - images : ensemble des images du répertoire ;
+			 - xmove : entre 0.0 et 1.0, indique la position x initiale dans l'image complète virtuelle ;
+			 - ymove : entre 0.0 et 1.0, indique la position y initiale dans l'image complète virtuelle.
+		'''
+		# Supprime tous les éléments du canvas (permet de faire le ménage).
 		self.canvas.delete("all")
+		# Sélectionne les images à utiliser et les place dans une matrice.
 		self.images = self.selection_images(nom,resolution,images)
 
-		self.image00 = Image.open(repertoire + self.images[0][0])  # open image
+		# Initialise le tableau des quatre images flottantes.
+		self.image00 = Image.open(repertoire + self.images[0][0])
 		if self.dimX > 0:
 			self.image10 = Image.open(repertoire + self.images[1][0])
 		if self.dimY > 0:
@@ -79,33 +129,48 @@ class Zoom_Advanced(ttk.Frame):
 		self.tuple01 = (0,1)
 		self.tuple11 = (1,1)
 
+		# Largeur et longueur de l'image complète.
 		self.width = self.image00.size[0] * 2
 		self.height = self.image00.size[1] * 2
 
-		self.imscale = 1.0  # scale for the canvas image
-		self.delta = 1.3  # zoom magnitude
+		# Echelle
+		self.imscale = 1.0
+		# Magnitude du zoom
+		self.delta = 1.3
 
-		# Put image into container rectangle and use it to set proper coordinates to the image
+		# Crée un canvas de taille équivalente à la résolution de l'image complète.
 		self.container = self.canvas.create_rectangle(0, 0, resolution, resolution, width=0)
-
 		self.canvas.configure(scrollregion=(1,1,int(resolution)-1,int(resolution)-1))
-		bbox2 = (self.canvas.canvasx(0),  # get visible area of the canvas
-				 self.canvas.canvasy(0),
-				 self.canvas.canvasx(self.canvas.winfo_width()),
-				 self.canvas.canvasy(self.canvas.winfo_height()))
 
+		# Sélectionne la partie du canvas à afficher.
 		self.canvas.xview_moveto(xmove)
 		self.canvas.yview_moveto(ymove)
 		self.canvas.update()
 
+		# Initialise l'image affichée.
 		self.initial_show_image()
 
+
 	def selection_images(self,nom,resolution,images):
+		''' Sélectionne les images à utiliser pour une résolution donnée.
+
+			Args:
+			 - nom : première partie du nom des images à utiliser ;
+			 - resolution : résolution à utiliser ;
+			 - images : ensemble des images du répertoire.
+
+			Returns:
+			 - matrice : matrice des images à utiliser.
+		'''
+		# Initialise ou remet à zéro les dimensions de la classe.
 		self.dimX = 0
 		self.dimY = 0
+
+		# Variables utiles localement.
 		count= 0
 		split = []
-		#print(nom, " ", resolution)
+		
+		# Détermine les dimensions de la matrice des images à utiliser.
 		for image in images:
 			split = image.split('.')[0]
 			split = split.split('_')
@@ -116,17 +181,32 @@ class Zoom_Advanced(ttk.Frame):
 				if int(split[3]) > self.dimY:
 					self.dimY = int(split[3])
 
-		liste = np.zeros((self.dimX + 1,self.dimY + 1),dtype = object)
+		# Initialisation de la matrice des images à utiliser.
+		matrice = np.zeros((self.dimX + 1,self.dimY + 1),dtype = object)
 
+		# Sélectionne les images à utiliser en effectuant des tests sur leur nom.
 		for image in images:
 			split = image.split('.')[0]
 			split = split.split('_')
 			if split[0]==nom and split[1]==resolution:
-				liste[int(split[2])][int(split[3])] = image
+				matrice[int(split[2])][int(split[3])] = image
 
-		return(liste)
+		return(matrice)
+
 
 	def detect_resolution(self,nom,resolution,images):
+		''' Vérifie que le passage à une nouvelle résolution est possible.
+
+			Args:
+			 - nom : première partie du nom des images à utiliser ;
+			 - resolution : résolution à utiliser ;
+			 - images : ensemble des images du répertoire.
+
+			Returns:
+			 - True : le changement est possible.
+			 - False : le changement est impossible.
+		'''
+		# Effectue un test sur le nom des images pour vérifier que le changement est possible.
 		for image in images:
 			split = image.split('.')[0]
 			split = split.split('_')
@@ -134,27 +214,39 @@ class Zoom_Advanced(ttk.Frame):
 				return True
 		return False
 
+
 	def scroll_y(self, *args, **kwargs):
-		''' Scroll canvas vertically and redraw the image '''
-		self.canvas.yview(*args, **kwargs)  # scroll vertically
-		self.show_image()  # redraw the image
+		''' Défile verticalement le canvas et redessine l'image. '''
+		# Défilement vertical.
+		self.canvas.yview(*args, **kwargs)
+		# Redessine l'image.
+		self.show_image()
+
 
 	def scroll_x(self, *args, **kwargs):
-		''' Scroll canvas horizontally and redraw the image '''
-		self.canvas.xview(*args, **kwargs)  # scroll horizontally
-		self.show_image()  # redraw the image
+		''' Défile horizontalement le canvas et redessine l'image. '''
+		self.canvas.xview(*args, **kwargs)  # Défilement horizontal.
+		self.show_image()  # Redessine l'image.
+
 
 	def move_from(self, event):
-		''' Remember previous coordinates for scrolling with the mouse '''
+		''' Enregistre les coordonnées du point cliqué. '''
 		self.canvas.scan_mark(event.x, event.y)
 
-	def move_to(self, event):
 
-		''' Drag (move) canvas to the new position '''
+	def move_to(self, event):
+		''' Translate le canvas jusqu'à la nouvelle position et redessine l'image. '''
 		self.canvas.scan_dragto(event.x, event.y, gain=1)
-		self.show_image()  # redraw the image
+		self.show_image()  # Redessine l'image.
+
 
 	def change_image(self,intx,inty,newx,newy):
+		''' Change une des images du tableau des quatre images flottantes.
+
+			Args:
+			 - intx, inty : indices dans le tableau de l'image à changer.
+			 - newx, newy : indices dans la matrice complète de l'image à utiliser.
+		'''
 		if intx == 0:
 			if inty == 0:
 				self.tuple00 = (newx,newy)
@@ -170,10 +262,11 @@ class Zoom_Advanced(ttk.Frame):
 				self.tuple11 = (newx,newy)
 				self.image11 = Image.open(repertoire + self.images[newx][newy])
 
-	def wheel(self, event):
-		''' Zoom with mouse wheel '''
 
-		bbox1 = self.canvas.bbox(self.container)  # get image area
+	def wheel(self, event):
+		''' Zoom. '''
+
+		bbox1 = self.canvas.bbox(self.container)
 
 		sizex = np.abs(bbox1[2] - bbox1[0])
 		sizey = np.abs(bbox1[3] - bbox1[1])
@@ -203,7 +296,6 @@ class Zoom_Advanced(ttk.Frame):
 
 		xratio = x1 / (bbox[2]-bbox[0])
 		yratio = y1 / (bbox[3]-bbox[1])
-		print("ratio ",xratio , yratio)
 
 		if np.abs(x2 - x1)*self.delta > 2 * titleDimX or np.abs(y2 - y1)*self.delta > 2 * titleDimY:
 			return
@@ -262,52 +354,63 @@ class Zoom_Advanced(ttk.Frame):
 			self.canvas.scale('all', x, y, scale, scale)  # rescale all canvas objects
 			self.show_image()
 
-	def initial_show_image(self, event=None):
-		
-		print("chargement")
 
-		#self.canvas.update()
-		
+	def initial_show_image(self, event=None):
+		''' Initialise l'image affichée.
+			Affiche un message dans la console.
+		'''
+		print("chargement")
 		self.show_image()
 
-	def show_image(self, event=None):
-		''' Show image on the Canvas '''
-		bbox1 = self.canvas.bbox(self.container)  # get image area
 
+	def show_image(self, event=None):
+		''' Dessine l'image dans le canvas. '''
+		# Zone du container.
+		bbox1 = self.canvas.bbox(self.container)
+
+		# Taille du container et taille actuelle des images utilisées.
 		sizex = np.abs(bbox1[2] - bbox1[0])
 		sizey = np.abs(bbox1[3] - bbox1[1])
 		titleDimX = sizex//(self.dimX+1)
 		titleDimY = sizey//(self.dimY+1)
 
-		#print(np.abs(bbox1[2] - bbox1[0]))
-		#print(self.dimX,self.dimY)
-		#print(titleDimX,titleDimY) 
-
-		# Remove 1 pixel shift at the sides of the bbox1
+		# Enlève un pixel de chaque côté.
 		bbox1 = (bbox1[0] + 1, bbox1[1] + 1, bbox1[2] - 1, bbox1[3] - 1)
 
-		bbox2 = (self.canvas.canvasx(0),  # get visible area of the canvas
+		# Zone visible du canvas.
+		bbox2 = (self.canvas.canvasx(0),
 				 self.canvas.canvasy(0),
 				 self.canvas.canvasx(self.canvas.winfo_width()),
 				 self.canvas.canvasy(self.canvas.winfo_height()))
 		
-		bbox = [min(bbox1[0], bbox2[0]), min(bbox1[1], bbox2[1]),  # get scroll region box
+		# Détermination de la zone d'interaction.
+		bbox = [min(bbox1[0], bbox2[0]), min(bbox1[1], bbox2[1]),
 				max(bbox1[2], bbox2[2]), max(bbox1[3], bbox2[3])]
 		
-		if bbox[0] == bbox2[0] and bbox[2] == bbox2[2]:  # whole image in the visible area
+		# Ajustements.
+		if bbox[0] == bbox2[0] and bbox[2] == bbox2[2]:
 			bbox[0] = bbox1[0]
 			bbox[2] = bbox1[2]
-		if bbox[1] == bbox2[1] and bbox[3] == bbox2[3]:  # whole image in the visible area
+		if bbox[1] == bbox2[1] and bbox[3] == bbox2[3]:
 			bbox[1] = bbox1[1]
 			bbox[3] = bbox1[3]
-		self.canvas.configure(scrollregion=bbox)  # set scroll region
-		x1 = max(bbox2[0] - bbox1[0], 0)  # get coordinates (x1,y1,x2,y2) of the image tile
+
+		# Configuration de la zone d'interaction.
+		self.canvas.configure(scrollregion=bbox)
+
+		# Coordonnées de l'ensemble des images affichées.
+		x1 = max(bbox2[0] - bbox1[0], 0)
 		y1 = max(bbox2[1] - bbox1[1], 0)
 		x2 = min(bbox2[2], bbox1[2]) - bbox1[0]
 		y2 = min(bbox2[3], bbox1[3]) - bbox1[1]
 
+		# Indices des images affichées dans la matrice.
 		tx1 = int(x1 // titleDimX)
 		ty1 = int(y1 // titleDimY)
+		tx2 = int(x2 // titleDimX)
+		ty2 = int(y2 // titleDimY)
+
+		# Partie de l'image haut-gauche à afficher.
 		qx1 = x1 % titleDimX
 		qy1 = y1 % titleDimY
 		if tx1 < 0:
@@ -316,9 +419,8 @@ class Zoom_Advanced(ttk.Frame):
 		if ty1 < 0:
 			ty1 = 0
 			qy1 = 0
-
-		tx2 = int(x2 // titleDimX)
-		ty2 = int(y2 // titleDimY)
+		
+		# Partie de l'image bas-droit à afficher.
 		qx2 = x2 % titleDimX
 		qy2 = y2 % titleDimY
 
@@ -329,15 +431,18 @@ class Zoom_Advanced(ttk.Frame):
 			ty2 = self.dimY
 			qy2 = 0
 
+		# Test sur l'image haut-gauche pour déterminer si la référence est la bonne, changement de référence
+		# sinon.
 		if (tx1,ty1) != self.tuple00:
 			self.change_image(0,0,int(tx1),int(ty1))
-			
+		
+		# Partie de l'image en haut à gauche de la partie à afficher.
 		xt = self.tuple00[0] * titleDimX
 		yt = self.tuple00[1] * titleDimY
 
 
 		if tx1 == tx2 :
-
+			# Une seule image à afficher.
 			if ty1 == ty2 :
 				image00 = self.image00.crop((int((x1 - xt)/ self.imscale), int((y1 - yt)/ self.imscale), 
 					int((x2 -xt)/ self.imscale),int((y2 -yt)/ self.imscale)))
@@ -345,10 +450,12 @@ class Zoom_Advanced(ttk.Frame):
 				imageid00 = self.canvas.create_image(max(bbox2[0], bbox1[0]), max(bbox2[1], bbox1[1]),
 					anchor='nw', image=imagetk00, tags ='r')
 
-				self.canvas.lower(imageid00)  # set image into background
-				self.canvas.imagetk00 = imagetk00  # keep an extra reference to prevent garbage-collection
+				self.canvas.lower(imageid00)
+				# Référence pour éviter des suppressions inutiles.
+				self.canvas.imagetk00 = imagetk00
 
 			else:
+				# Deux images à afficher : haut-gauche et bas-gauche.
 				if(tx1,ty2) != self.tuple01:
 					self.change_image(0,1,int(tx1),int(ty2))
 
@@ -357,9 +464,11 @@ class Zoom_Advanced(ttk.Frame):
 				imagetk00 = ImageTk.PhotoImage(image00.resize((int(x2 - x1), int(titleDimY - y1 + yt))))
 				imageid00 = self.canvas.create_image(max(bbox2[0], bbox1[0]), max(bbox2[1], bbox1[1]),
 					anchor='nw', image=imagetk00, tags ='r')
-				self.canvas.lower(imageid00)  # set image into background
+				self.canvas.lower(imageid00)
+				# Référence pour éviter des suppressions inutiles.
 				self.canvas.imagetk00 = imagetk00
 
+				# Test pour déterminer si la bordure du bas se trouve sur la limite entre les deux images.
 				if qy2 > 0:
 
 					image01 = self.image01.crop((int((x1 -xt)/ self.imscale),0,
@@ -368,11 +477,12 @@ class Zoom_Advanced(ttk.Frame):
 					imageid01 = self.canvas.create_image(max(bbox2[0], bbox1[0]),max(bbox2[1], bbox1[1])+int(titleDimY - y1 + yt),
 						anchor='nw', image=imagetk01, tags = 'r')
 					self.canvas.lower(imageid01)
+					# Référence pour éviter des suppressions inutiles.
 					self.canvas.imagetk01 = imagetk01
 
 		else:
 			if ty1 == ty2:
-					
+				# Deux images à afficher : haut-gauche et haut-droit.
 				if(tx2,ty1) != self.tuple10:
 					self.change_image(1,0,int(tx2),int(ty1))
 
@@ -381,7 +491,7 @@ class Zoom_Advanced(ttk.Frame):
 				imagetk00 = ImageTk.PhotoImage(image00.resize((int(titleDimX - x1 + xt), int(y2 - y1))))
 				imageid00 = self.canvas.create_image(max(bbox2[0], bbox1[0]), max(bbox2[1], bbox1[1]),
 					anchor='nw', image=imagetk00, tags ='r')
-				self.canvas.lower(imageid00)  # set image into background
+				self.canvas.lower(imageid00)
 				self.canvas.imagetk00 = imagetk00
 
 				if qx2 > 0:
@@ -397,6 +507,7 @@ class Zoom_Advanced(ttk.Frame):
 
 
 			else:
+				# Quatre images à afficher.
 				if(tx2,ty1) != self.tuple10:
 					self.change_image(1,0,int(tx2),int(ty1))
 				if(tx1,ty2) != self.tuple01:
@@ -409,7 +520,7 @@ class Zoom_Advanced(ttk.Frame):
 				imagetk00 = ImageTk.PhotoImage(image00.resize((int(titleDimX - x1 + xt), int(titleDimY - y1 + yt))))
 				imageid00 = self.canvas.create_image(max(bbox2[0], bbox1[0]), max(bbox2[1], bbox1[1]),
 					anchor='nw', image=imagetk00, tags ='r')
-				self.canvas.lower(imageid00)  # set image into background
+				self.canvas.lower(imageid00)
 				self.canvas.imagetk00 = imagetk00
 
 				if qy2 > 0:
@@ -444,7 +555,10 @@ class Zoom_Advanced(ttk.Frame):
 					self.canvas.lower(imageid11)
 					self.canvas.imagetk11 = imagetk11
 
+# Initialise une fenêtre TKinter 700x700 pixels.
 root = tk.Tk()
-root.geometry('700x700') # Size 200, 200
+root.geometry('700x700')
+# Crée une instance de Zoom_Advanced().
 app = Zoom_Advanced(root)
+# Boucle.
 root.mainloop()
