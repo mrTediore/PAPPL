@@ -18,6 +18,7 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
 import os
+import threading
 import sys
 import numpy as np
 import timeit
@@ -25,7 +26,8 @@ import timeit
 #Résolution à afficher en premier.
 resolution = sys.argv[1]
 #Répertoire de la famille d'images.
-repertoire = str(sys.argv[2]) + "/"
+#Mac :repertoire = str(sys.argv[2]) + "/"
+repertoire = "../" + str(sys.argv[2]) + "/"
 
 #Référence au répertoire de travail.
 imgs = os.listdir(repertoire)
@@ -169,7 +171,7 @@ class Zoom_Advanced(ttk.Frame):
 		# Variables utiles localement.
 		count= 0
 		split = []
-		
+
 		# Détermine les dimensions de la matrice des images à utiliser.
 		for image in images:
 			split = image.split('.')[0]
@@ -278,10 +280,10 @@ class Zoom_Advanced(ttk.Frame):
 				 self.canvas.canvasy(0),
 				 self.canvas.canvasx(self.canvas.winfo_width()),
 				 self.canvas.canvasy(self.canvas.winfo_height()))
-		
+
 		bbox = [min(bbox1[0], bbox2[0]), min(bbox1[1], bbox2[1]),  # get scroll region box
 				max(bbox1[2], bbox2[2]), max(bbox1[3], bbox2[3])]
-		
+
 		if bbox[0] == bbox2[0] and bbox[2] == bbox2[2]:  # whole image in the visible area
 			bbox[0] = bbox1[0]
 			bbox[2] = bbox1[2]
@@ -300,7 +302,6 @@ class Zoom_Advanced(ttk.Frame):
 		if np.abs(x2 - x1)*self.delta > 2 * titleDimX or np.abs(y2 - y1)*self.delta > 2 * titleDimY:
 			return
 		else:
-			
 
 			x = self.canvas.canvasx(event.x)
 			y = self.canvas.canvasy(event.y)
@@ -339,6 +340,8 @@ class Zoom_Advanced(ttk.Frame):
 				scale        *= self.delta
 
 				if self.imscale > (self.delta*3): #1
+					wait=WaitThread()
+					wait.start()
 					if self.detect_resolution("C400-Mesh",str(int(self.resolution) * 2),imgs):
 						self.canvas.delete('r')
 						self.resolution = str(int(self.resolution) * 2)
@@ -347,9 +350,10 @@ class Zoom_Advanced(ttk.Frame):
 					else:
 						self.imscale = self.imscale / self.delta
 						return
+					wait.destroy()
 				else:
 					self.canvas.delete('r')
-					
+
 
 			self.canvas.scale('all', x, y, scale, scale)  # rescale all canvas objects
 			self.show_image()
@@ -360,6 +364,11 @@ class Zoom_Advanced(ttk.Frame):
 			Affiche un message dans la console.
 		'''
 		print("chargement")
+		wait=WaitThread2()
+		wait.start()
+
+		#self.canvas.update()
+
 		self.show_image()
 
 
@@ -382,11 +391,11 @@ class Zoom_Advanced(ttk.Frame):
 				 self.canvas.canvasy(0),
 				 self.canvas.canvasx(self.canvas.winfo_width()),
 				 self.canvas.canvasy(self.canvas.winfo_height()))
-		
+
 		# Détermination de la zone d'interaction.
 		bbox = [min(bbox1[0], bbox2[0]), min(bbox1[1], bbox2[1]),
 				max(bbox1[2], bbox2[2]), max(bbox1[3], bbox2[3])]
-		
+
 		# Ajustements.
 		if bbox[0] == bbox2[0] and bbox[2] == bbox2[2]:
 			bbox[0] = bbox1[0]
@@ -419,7 +428,7 @@ class Zoom_Advanced(ttk.Frame):
 		if ty1 < 0:
 			ty1 = 0
 			qy1 = 0
-		
+
 		# Partie de l'image bas-droit à afficher.
 		qx2 = x2 % titleDimX
 		qy2 = y2 % titleDimY
@@ -435,7 +444,6 @@ class Zoom_Advanced(ttk.Frame):
 		# sinon.
 		if (tx1,ty1) != self.tuple00:
 			self.change_image(0,0,int(tx1),int(ty1))
-		
 		# Partie de l'image en haut à gauche de la partie à afficher.
 		xt = self.tuple00[0] * titleDimX
 		yt = self.tuple00[1] * titleDimY
@@ -444,7 +452,7 @@ class Zoom_Advanced(ttk.Frame):
 		if tx1 == tx2 :
 			# Une seule image à afficher.
 			if ty1 == ty2 :
-				image00 = self.image00.crop((int((x1 - xt)/ self.imscale), int((y1 - yt)/ self.imscale), 
+				image00 = self.image00.crop((int((x1 - xt)/ self.imscale), int((y1 - yt)/ self.imscale),
 					int((x2 -xt)/ self.imscale),int((y2 -yt)/ self.imscale)))
 				imagetk00 = ImageTk.PhotoImage(image00.resize((int(x2 - x1), int(y2 - y1))))
 				imageid00 = self.canvas.create_image(max(bbox2[0], bbox1[0]), max(bbox2[1], bbox1[1]),
@@ -514,7 +522,7 @@ class Zoom_Advanced(ttk.Frame):
 					self.change_image(0,1,int(tx1),int(ty2))
 				if(tx2,ty2) != self.tuple11:
 					self.change_image(1,1,int(tx2),int(ty2))
-					
+
 				image00 = self.image00.crop((int((x1 -xt)/ self.imscale), int((y1 -yt)/ self.imscale),
 					int((titleDimX)/ self.imscale),int((titleDimY)/ self.imscale)))
 				imagetk00 = ImageTk.PhotoImage(image00.resize((int(titleDimX - x1 + xt), int(titleDimY - y1 + yt))))
@@ -555,10 +563,38 @@ class Zoom_Advanced(ttk.Frame):
 					self.canvas.lower(imageid11)
 					self.canvas.imagetk11 = imagetk11
 
-# Initialise une fenêtre TKinter 700x700 pixels.
+
+class WaitThread(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self, target = self.Target)
+    def Target(self):
+        tp = tk.Toplevel(root)
+        lbl = tk.Label(tp, text='Chargement de l\'image à afficher', relief="groove", height=10, width=50)
+        lbl.pack()
+
+class WaitThread2(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self, target = self.Target)
+    def Target(self):
+        tp = tk.Toplevel(root)
+        lbl = tk.Label(tp, text='Image chargée', relief="groove")
+        lbl.pack()
+
+
 root = tk.Tk()
-root.geometry('700x700')
-# Crée une instance de Zoom_Advanced().
+root.geometry('700x700') # Size 200, 200
+
+#def busy():
+#    root.config(cursor="clock")
+#
+#def notbusy():
+#    root.config(cursor="")
+#
+#b = Button(root, text="busy!", command=busy)
+#b.pack()
+#
+#b = Button(root, text="not busy!", command=notbusy)
+#b.pack()
+
 app = Zoom_Advanced(root)
-# Boucle.
 root.mainloop()
