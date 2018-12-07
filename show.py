@@ -26,8 +26,8 @@ import timeit
 #Résolution à afficher en premier.
 resolution = sys.argv[1]
 #Répertoire de la famille d'images.
-#Mac :repertoire = str(sys.argv[2]) + "/"
-repertoire = "../" + str(sys.argv[2]) + "/"
+repertoire = str(sys.argv[2]) + "/"
+#W : repertoire = "../" + str(sys.argv[2]) + "/"
 
 #Référence au répertoire de travail.
 imgs = os.listdir(repertoire)
@@ -318,9 +318,12 @@ class Zoom_Advanced(ttk.Frame):
 
 				if self.imscale < (self.delta / 4): #2
 					if self.detect_resolution("C400-Mesh",str(int(self.resolution) // 2),imgs):
+						self.wait=WaitThread()
+						self.wait.start()
 						self.canvas.delete('r')
 						self.resolution = str(int(self.resolution) // 2)
 						self.configurate_canvas("C400-Mesh",self.resolution,imgs,xratio,yratio)
+						self.wait.destroy()
 						return
 					else:
 						if self.dimX == 0 and self.dimY == 0 :
@@ -340,17 +343,17 @@ class Zoom_Advanced(ttk.Frame):
 				scale        *= self.delta
 
 				if self.imscale > (self.delta*3): #1
-					wait=WaitThread()
-					wait.start()
 					if self.detect_resolution("C400-Mesh",str(int(self.resolution) * 2),imgs):
+						self.wait=WaitThread()
+						self.wait.start()
 						self.canvas.delete('r')
 						self.resolution = str(int(self.resolution) * 2)
 						self.configurate_canvas("C400-Mesh",self.resolution,imgs,xratio,yratio)
+						self.wait.destroy()
 						return
 					else:
 						self.imscale = self.imscale / self.delta
 						return
-					wait.destroy()
 				else:
 					self.canvas.delete('r')
 
@@ -364,8 +367,6 @@ class Zoom_Advanced(ttk.Frame):
 			Affiche un message dans la console.
 		'''
 		print("chargement")
-		wait=WaitThread2()
-		wait.start()
 
 		#self.canvas.update()
 
@@ -565,19 +566,21 @@ class Zoom_Advanced(ttk.Frame):
 
 
 class WaitThread(threading.Thread):
-    def __init__(self):
-        threading.Thread.__init__(self, target = self.Target)
-    def Target(self):
-        tp = tk.Toplevel(root)
-        lbl = tk.Label(tp, text='Chargement de l\'image à afficher', relief="groove", height=10, width=50)
-        lbl.pack()
+	def __init__(self):
+		threading.Thread.__init__(self, target = self.Target)
+	def Target(self):
+		self.tp = tk.Toplevel(root)
+		lbl = tk.Label(self.tp, text='Chargement de l\'image à afficher', relief="groove", height=10, width=50)
+		lbl.pack()
+	def destroy(self):
+		self.tp.destroy()
 
 class WaitThread2(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self, target = self.Target)
     def Target(self):
-        tp = tk.Toplevel(root)
-        lbl = tk.Label(tp, text='Image chargée', relief="groove")
+        self.tp = tk.Toplevel(root)
+        lbl = tk.Label(self.tp, text='Image chargée', relief="groove")
         lbl.pack()
 
 
