@@ -62,7 +62,7 @@ class Zoom_Advanced(ttk.Frame):
 	def __init__(self, mainframe):
 		''' Initialise le cadre. '''
 		ttk.Frame.__init__(self, master=mainframe)
-		self.master.title('Zoom with mouse wheel')
+		self.master.title(repertoire)
 
 		# Barres de défilement.
 		vbar = AutoScrollbar(self.master, orient='vertical')
@@ -97,10 +97,10 @@ class Zoom_Advanced(ttk.Frame):
 		self.resolution = resolution
 
 		# Configuration du canvas.
-		self.configurate_canvas("C400-Mesh",str(resolution),imgs)
+		self.configurate_canvas(str(resolution),imgs)
 
 
-	def configurate_canvas(self,nom,resolution,images,xmove=0.0,ymove=0.0):
+	def configurate_canvas(self,resolution,images,xmove=0.0,ymove=0.0):
 		''' Configuration du canvas à une certaine résolution.
 			Permet d'initialiser le cadre, puis de passer d'une résolution à une autre.
 			Appelle la méthode self.initial_show_image() pour mettre en place le canvas.
@@ -115,7 +115,7 @@ class Zoom_Advanced(ttk.Frame):
 		# Supprime tous les éléments du canvas (permet de faire le ménage).
 		self.canvas.delete("all")
 		# Sélectionne les images à utiliser et les place dans une matrice.
-		self.images = self.selection_images(nom,resolution,images)
+		self.images = self.selection_images(resolution,images)
 
 		# Initialise le tableau des quatre images flottantes.
 		self.image00 = Image.open(repertoire + self.images[0][0])
@@ -153,7 +153,7 @@ class Zoom_Advanced(ttk.Frame):
 		self.initial_show_image()
 
 
-	def selection_images(self,nom,resolution,images):
+	def selection_images(self,resolution,images):
 		''' Sélectionne les images à utiliser pour une résolution donnée.
 
 			Args:
@@ -176,7 +176,7 @@ class Zoom_Advanced(ttk.Frame):
 		for image in images:
 			split = image.split('.')[0]
 			split = split.split('_')
-			if split[0]==nom and split[1]==resolution:
+			if len(split)>=2 and split[1]==resolution:
 				count += 1
 				if int(split[2]) > self.dimX:
 					self.dimX = int(split[2])
@@ -190,13 +190,13 @@ class Zoom_Advanced(ttk.Frame):
 		for image in images:
 			split = image.split('.')[0]
 			split = split.split('_')
-			if split[0]==nom and split[1]==resolution:
+			if len(split)>=2 and split[1]==resolution:
 				matrice[int(split[2])][int(split[3])] = image
 
 		return(matrice)
 
 
-	def detect_resolution(self,nom,resolution,images):
+	def detect_resolution(self,resolution,images):
 		''' Vérifie que le passage à une nouvelle résolution est possible.
 
 			Args:
@@ -212,7 +212,7 @@ class Zoom_Advanced(ttk.Frame):
 		for image in images:
 			split = image.split('.')[0]
 			split = split.split('_')
-			if split[0]==nom and split[1]==resolution:
+			if len(split)>=2 and split[1]==resolution:
 				return True
 		return False
 
@@ -266,7 +266,9 @@ class Zoom_Advanced(ttk.Frame):
 
 
 	def wheel(self, event):
-		''' Zoom. '''
+		''' Zoom. 
+			Change la résolution de l'image affichée en fonction de la nouvelle échelle.
+			'''
 
 		bbox1 = self.canvas.bbox(self.container)
 
@@ -276,22 +278,22 @@ class Zoom_Advanced(ttk.Frame):
 		titleDimY = sizey//(self.dimY+1)
 		bbox1 = (bbox1[0] + 1, bbox1[1] + 1, bbox1[2] - 1, bbox1[3] - 1)
 
-		bbox2 = (self.canvas.canvasx(0),  # get visible area of the canvas
+		bbox2 = (self.canvas.canvasx(0),
 				 self.canvas.canvasy(0),
 				 self.canvas.canvasx(self.canvas.winfo_width()),
 				 self.canvas.canvasy(self.canvas.winfo_height()))
 
-		bbox = [min(bbox1[0], bbox2[0]), min(bbox1[1], bbox2[1]),  # get scroll region box
+		bbox = [min(bbox1[0], bbox2[0]), min(bbox1[1], bbox2[1]),
 				max(bbox1[2], bbox2[2]), max(bbox1[3], bbox2[3])]
 
-		if bbox[0] == bbox2[0] and bbox[2] == bbox2[2]:  # whole image in the visible area
+		if bbox[0] == bbox2[0] and bbox[2] == bbox2[2]:
 			bbox[0] = bbox1[0]
 			bbox[2] = bbox1[2]
-		if bbox[1] == bbox2[1] and bbox[3] == bbox2[3]:  # whole image in the visible area
+		if bbox[1] == bbox2[1] and bbox[3] == bbox2[3]:
 			bbox[1] = bbox1[1]
 			bbox[3] = bbox1[3]
-		self.canvas.configure(scrollregion=bbox)  # set scroll region
-		x1 = max(bbox2[0] - bbox1[0], 0)  # get coordinates (x1,y1,x2,y2) of the image tile
+		self.canvas.configure(scrollregion=bbox)
+		x1 = max(bbox2[0] - bbox1[0], 0)
 		y1 = max(bbox2[1] - bbox1[1], 0)
 		x2 = min(bbox2[2], bbox1[2]) - bbox1[0]
 		y2 = min(bbox2[3], bbox1[3]) - bbox1[1]
@@ -305,24 +307,23 @@ class Zoom_Advanced(ttk.Frame):
 
 			x = self.canvas.canvasx(event.x)
 			y = self.canvas.canvasy(event.y)
-			bbox = self.canvas.bbox(self.container)  # get image area
-			if bbox[0] < x < bbox[2] and bbox[1] < y < bbox[3]: pass  # Ok! Inside the image
-			else: return  # zoom only inside image area
+			bbox = self.canvas.bbox(self.container)
+			if bbox[0] < x < bbox[2] and bbox[1] < y < bbox[3]: pass
+			else: return
 			scale = 1.0
-			# Respond to Linux (event.num) or Windows (event.delta) wheel event
-			if event.num == 5 or event.delta <= 0:  # scroll down
+			
+			if event.num == 5 or event.delta <= 0:  # dézooom
 				i = min(self.width, self.height)
-				#if int(i * self.imscale) < 1000: return  # image is less than 30 pixels
 				self.imscale /= self.delta
 				scale        /= self.delta
 
-				if self.imscale < (self.delta / 4): #2
-					if self.detect_resolution("C400-Mesh",str(int(self.resolution) // 2),imgs):
+				if self.imscale < (self.delta / 4): # Chargement de la résolution inférieure
+					if self.detect_resolution(str(int(self.resolution) // 2),imgs):
 						self.wait=WaitThread()
 						self.wait.start()
 						self.canvas.delete('r')
 						self.resolution = str(int(self.resolution) // 2)
-						self.configurate_canvas("C400-Mesh",self.resolution,imgs,xratio,yratio)
+						self.configurate_canvas(self.resolution,imgs,xratio,yratio)
 						self.wait.destroy()
 						return
 					else:
@@ -336,19 +337,19 @@ class Zoom_Advanced(ttk.Frame):
 				else:
 					self.canvas.delete('r')
 
-			if event.num == 4 or event.delta > 0:  # scroll up
+			if event.num == 4 or event.delta > 0:  # zoom
 				i = min(self.canvas.winfo_width(), self.canvas.winfo_height())
-				if i < self.imscale: return  # 1 pixel is bigger than the visible area
+				if i < self.imscale: return
 				self.imscale *= self.delta
 				scale        *= self.delta
 
-				if self.imscale > (self.delta*3): #1
-					if self.detect_resolution("C400-Mesh",str(int(self.resolution) * 2),imgs):
+				if self.imscale > (self.delta*3): # Chargement de la résolution supérieure
+					if self.detect_resolution(str(int(self.resolution) * 2),imgs):
 						self.wait=WaitThread()
 						self.wait.start()
 						self.canvas.delete('r')
 						self.resolution = str(int(self.resolution) * 2)
-						self.configurate_canvas("C400-Mesh",self.resolution,imgs,xratio,yratio)
+						self.configurate_canvas(self.resolution,imgs,xratio,yratio)
 						self.wait.destroy()
 						return
 					else:
@@ -357,8 +358,8 @@ class Zoom_Advanced(ttk.Frame):
 				else:
 					self.canvas.delete('r')
 
-
-			self.canvas.scale('all', x, y, scale, scale)  # rescale all canvas objects
+			# Redimensionne les objets du canvas
+			self.canvas.scale('all', x, y, scale, scale)
 			self.show_image()
 
 
@@ -566,38 +567,24 @@ class Zoom_Advanced(ttk.Frame):
 
 
 class WaitThread(threading.Thread):
+	'''
+		Apparition d'un message de chargement dans une nouvelle fenêtre.
+	'''
 	def __init__(self):
 		threading.Thread.__init__(self, target = self.Target)
 	def Target(self):
+		# Crée la fenêtre et la place au-dessus de la fenêtre principale
 		self.tp = tk.Toplevel(root)
 		lbl = tk.Label(self.tp, text='Chargement de l\'image à afficher', relief="groove", height=10, width=50)
 		lbl.pack()
+		self.tp.update()
 	def destroy(self):
+		# Détruit la fenêtre du message
 		self.tp.destroy()
-
-class WaitThread2(threading.Thread):
-    def __init__(self):
-        threading.Thread.__init__(self, target = self.Target)
-    def Target(self):
-        self.tp = tk.Toplevel(root)
-        lbl = tk.Label(self.tp, text='Image chargée', relief="groove")
-        lbl.pack()
 
 
 root = tk.Tk()
-root.geometry('700x700') # Size 200, 200
-
-#def busy():
-#    root.config(cursor="clock")
-#
-#def notbusy():
-#    root.config(cursor="")
-#
-#b = Button(root, text="busy!", command=busy)
-#b.pack()
-#
-#b = Button(root, text="not busy!", command=notbusy)
-#b.pack()
+root.geometry('700x700') # Size 700, 700
 
 app = Zoom_Advanced(root)
 root.mainloop()
