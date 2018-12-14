@@ -436,11 +436,11 @@ class Zoom_Advanced(ttk.Frame):
 		zoom = copy.deepcopy(self.imscale)
 		reso = copy.deepcopy(self.resolution)
 
-		yratiof = copy.deepcopy(yratio)
 		xratiof = copy.deepcopy(xratio)
+		yratiof = copy.deepcopy(yratio)
 
 		f= open("SauvegardePosition.txt","w+")
-		f.write(str(zoom) + "\n" + str(reso) + "\n" + str(yratiof) + "\n" + str(xratiof) + "\n")
+		f.write(str(zoom) + "\n" + str(reso) + "\n" + str(xratiof) + "\n" + str(yratiof) + "\n")
 		f.close()
 
 		# Indices des images affichées dans la matrice.
