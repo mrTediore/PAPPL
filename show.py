@@ -22,17 +22,30 @@ import threading
 import sys
 import numpy as np
 import timeit
+import copy
 
 #Résolution à afficher en premier.
 resolution = sys.argv[1]
 #Répertoire de la famille d'images.
-repertoire = str(sys.argv[2]) + "/"
-#W : repertoire = "../" + str(sys.argv[2]) + "/"
+#repertoire = str(sys.argv[2]) + "/"
+repertoire = "../" + str(sys.argv[2]) + "/"
+
+if len(sys.argv) == 4:
+	Save_file = open(sys.argv[3],"r")
+	f1 = Save_file.readlines()
+	i = 0
+	Infos = [0 for i in range(4)]
+	for x in f1:
+		x1 = x.replace("\n","")
+		Infos[i] = float(x1)
+		i = i+1
+	Save_file.close()
+	Infos[1] = int(Infos[1])
+	resolution = Infos[1]
+	print(Infos)
 
 #Référence au répertoire de travail.
 imgs = os.listdir(repertoire)
-
-
 
 class AutoScrollbar(ttk.Scrollbar):
 	''' Classe d'une barre de défilement, se plaçant à gauche et / ou en bas de la fenêtre si nécessaire.
@@ -59,7 +72,7 @@ class AutoScrollbar(ttk.Scrollbar):
 class Zoom_Advanced(ttk.Frame):
 	''' Classe du cadre principal. '''
 
-	def __init__(self, mainframe):
+	def __init__(self, mainframe, Infos):
 		''' Initialise le cadre. '''
 		ttk.Frame.__init__(self, master=mainframe)
 		self.master.title(repertoire)
@@ -94,13 +107,13 @@ class Zoom_Advanced(ttk.Frame):
 		self.canvas.bind('<Button-4>',   self.wheel)
 
 		# Résolution actuelle.
-		self.resolution = resolution
+		self.resolution = Infos[1]
 
 		# Configuration du canvas.
-		self.configurate_canvas(str(resolution),imgs)
+		self.configurate_canvas(resolution,imgs,Infos)
 
 
-	def configurate_canvas(self,resolution,images,xmove=0.0,ymove=0.0):
+	def configurate_canvas(self,resolution,images,Infos):
 		''' Configuration du canvas à une certaine résolution.
 			Permet d'initialiser le cadre, puis de passer d'une résolution à une autre.
 			Appelle la méthode self.initial_show_image() pour mettre en place le canvas.
@@ -115,6 +128,7 @@ class Zoom_Advanced(ttk.Frame):
 		# Supprime tous les éléments du canvas (permet de faire le ménage).
 		self.canvas.delete("all")
 		# Sélectionne les images à utiliser et les place dans une matrice.
+		resolution = str(resolution)
 		self.images = self.selection_images(resolution,images)
 
 		# Initialise le tableau des quatre images flottantes.
@@ -136,7 +150,7 @@ class Zoom_Advanced(ttk.Frame):
 		self.height = self.image00.size[1] * 2
 
 		# Echelle
-		self.imscale = 1.0
+		self.imscale = Infos[0]
 		# Magnitude du zoom
 		self.delta = 1.3
 
@@ -145,8 +159,8 @@ class Zoom_Advanced(ttk.Frame):
 		self.canvas.configure(scrollregion=(1,1,int(resolution)-1,int(resolution)-1))
 
 		# Sélectionne la partie du canvas à afficher.
-		self.canvas.xview_moveto(xmove)
-		self.canvas.yview_moveto(ymove)
+		self.canvas.xview_moveto(Infos[2])
+		self.canvas.yview_moveto(Infos[3])
 		self.canvas.update()
 
 		# Initialise l'image affichée.
@@ -193,6 +207,7 @@ class Zoom_Advanced(ttk.Frame):
 			if len(split)>=2 and split[1]==resolution:
 				matrice[int(split[2])][int(split[3])] = image
 
+		print(matrice)
 		return(matrice)
 
 
@@ -266,7 +281,7 @@ class Zoom_Advanced(ttk.Frame):
 
 
 	def wheel(self, event):
-		''' Zoom. 
+		''' Zoom.
 			Change la résolution de l'image affichée en fonction de la nouvelle échelle.
 			'''
 
@@ -311,7 +326,7 @@ class Zoom_Advanced(ttk.Frame):
 			if bbox[0] < x < bbox[2] and bbox[1] < y < bbox[3]: pass
 			else: return
 			scale = 1.0
-			
+
 			if event.num == 5 or event.delta <= 0:  # dézooom
 				i = min(self.width, self.height)
 				self.imscale /= self.delta
@@ -323,7 +338,7 @@ class Zoom_Advanced(ttk.Frame):
 						self.wait.start()
 						self.canvas.delete('r')
 						self.resolution = str(int(self.resolution) // 2)
-						self.configurate_canvas(self.resolution,imgs,xratio,yratio)
+						self.configurate_canvas(self.resolution,imgs,[1,0,xratio,yratio])
 						self.wait.destroy()
 						return
 					else:
@@ -349,7 +364,7 @@ class Zoom_Advanced(ttk.Frame):
 						self.wait.start()
 						self.canvas.delete('r')
 						self.resolution = str(int(self.resolution) * 2)
-						self.configurate_canvas(self.resolution,imgs,xratio,yratio)
+						self.configurate_canvas(self.resolution,imgs,[1,0,xratio,yratio])
 						self.wait.destroy()
 						return
 					else:
@@ -414,6 +429,19 @@ class Zoom_Advanced(ttk.Frame):
 		y1 = max(bbox2[1] - bbox1[1], 0)
 		x2 = min(bbox2[2], bbox1[2]) - bbox1[0]
 		y2 = min(bbox2[3], bbox1[3]) - bbox1[1]
+
+		xratio = x1 / (bbox[2]-bbox[0])
+		yratio = y1 / (bbox[3]-bbox[1])
+
+		zoom = copy.deepcopy(self.imscale)
+		reso = copy.deepcopy(self.resolution)
+
+		yratiof = copy.deepcopy(yratio)
+		xratiof = copy.deepcopy(xratio)
+
+		f= open("SauvegardePosition.txt","w+")
+		f.write(str(zoom) + "\n" + str(reso) + "\n" + str(yratiof) + "\n" + str(xratiof) + "\n")
+		f.close()
 
 		# Indices des images affichées dans la matrice.
 		tx1 = int(x1 // titleDimX)
@@ -582,9 +610,15 @@ class WaitThread(threading.Thread):
 		# Détruit la fenêtre du message
 		self.tp.destroy()
 
+if len(sys.argv) != 4:
+	root = tk.Tk()
+	root.geometry('700x700') # Size 700, 700
+	Infos = [1.0, 8192.0, 0,0]
+	app = Zoom_Advanced(root, Infos)
+	root.mainloop()
+else:
+	root = tk.Tk()
+	root.geometry('700x700') # Size 700, 700
 
-root = tk.Tk()
-root.geometry('700x700') # Size 700, 700
-
-app = Zoom_Advanced(root)
-root.mainloop()
+	app = Zoom_Advanced(root,Infos)
+	root.mainloop()
