@@ -27,9 +27,9 @@ import copy
 #Résolution à afficher en premier.
 resolution = sys.argv[1]
 #Répertoire de la famille d'images.
-#repertoire = str(sys.argv[2]) + "/"
-repertoire = "../" + str(sys.argv[2]) + "/"
+repertoire = str(sys.argv[2]) + "/"
 
+#Chargement des information de la sauvegarde si une sauvegarde est chargée
 if len(sys.argv) == 4:
 	Save_file = open(sys.argv[3],"r")
 	f1 = Save_file.readlines()
